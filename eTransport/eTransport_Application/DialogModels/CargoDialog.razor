@@ -1,0 +1,76 @@
+﻿@using eTransport_Logic
+@using eTransport_Utility
+@inject ISnackbar _snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @ContentText
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm Model="@Cargo">
+            <DataAnnotationsValidator/>
+            <MudTextField @bind-Value="@Cargo.Destination" Label="Destination"></MudTextField>
+            <MudTextField @bind-Value="@Cargo.MaxCapacity" Label="Max Capacity"></MudTextField>
+            <MudMenu Variant="Variant.Filled" Direction="Direction.Bottom" Label="Truck">
+                @foreach (var truck in TruckCollection.GetTrucks())
+                {
+                    if (truck.InUse == false)
+                    {
+                        var parameters = $"{truck.Brand} ({truck.Capacity}|{truck.CargoType})";
+                        <MudMenuItem OnClick="() => AddTruck(truck)">@parameters</MudMenuItem>
+                    }
+                }
+            </MudMenu>
+        </EditForm>        
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Submit">@ButtonText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public CargoDto Cargo { get; set; }
+    [Parameter] public string ContentText { get; set; }
+    [Parameter] public string ButtonText { get; set; }
+    [Parameter] public List<int> TruckList { get; set; } = new();
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+        var trucks = TruckCollection.GetTrucks();
+        foreach (var truckId in TruckList)
+        {
+            trucks.SingleOrDefault(res => res.TruckId == truckId)?.Unlink();
+        }
+    }
+
+    private void AddTruck(Truck truck)
+    {
+        TruckList.Add(truck.TruckId);
+        var success = truck.Link();
+        if (success)
+        {
+            _snackbar.Add("Added truck that was just clicked.", Severity.Success);
+        }
+        else
+        {
+            _snackbar.Add("Was unable to add the selected truck", Severity.Error);
+        }
+    }
+
+    private void Submit()
+    {
+        if (TruckList.Count < 1) _snackbar.Add("No truck has been selected!", Severity.Error);
+        else
+        {
+            var maxCap = TruckList.Select(truckId => TruckCollection.GetTrucks().SingleOrDefault(res => res.TruckId == truckId).Capacity).Aggregate(0.0, (current, truckCap) => current + truckCap);
+            if (Cargo.MaxCapacity > maxCap)
+                _snackbar.Add("Rideshare capacity is set higher than Truck max capacity!", Severity.Error);
+            else MudDialog.Close(DialogResult.Ok($"{Cargo.Destination}|{string.Join(",",TruckList)}|{Cargo.MaxCapacity}"));
+        }
+    }
+}

@@ -1,0 +1,213 @@
+﻿@page "/cargopanel"
+@attribute [Authorize]
+@using eTransport_Logic
+@using Blazored.SessionStorage
+@using eTransport_Application.DialogModels
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISessionStorageService _storage
+@inject ISnackbar _snackbar
+@inject IDialogService _dialog
+
+<h3>Cargo</h3>
+
+<MudButton Variant="Variant.Filled" OnClick="CreateCargo">Create Cargo</MudButton>
+
+<MudTable Items="@_cargos" Dense="false" Hover="true" Bordered="false" Striped="false" Filter="new Func<Cargo,bool>(FilterFunc)" @bind-SelectedItem="selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Cargos</MudText>
+        <MudToolBarSpacer />
+        <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Id</MudTh>
+        <MudTh>Destination</MudTh>
+        <MudTh>Maximum Capacity</MudTh>
+        <MudTh>Cargo Type</MudTh>
+        <MudTh>Truck Brand</MudTh>
+        <MudTh>Linked Request</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Id">@context.CargoId</MudTd>
+        <MudTd DataLabel="Destination">@context.Destination</MudTd>
+        <MudTd DataLabel="Maximum Capacity">@context.MaxCapacity</MudTd>
+        <MudTd DataLabel="Cargo Type">@_trucks.SingleOrDefault(res => res.TruckId == context.SelectedTrucks.FirstOrDefault())?.CargoType</MudTd>
+        <MudTd DataLabel="Truck Brand">@_trucks.SingleOrDefault(res => res.TruckId == context.SelectedTrucks.FirstOrDefault())?.Brand.ToString()</MudTd>
+        <MudTd DataLabel="Linked Request">@context.RequestId</MudTd>
+        <MudTd DataLabel="Button">
+            <MudButton Variant="Variant.Filled" OnClick="() => EditCargo(context)">Edit</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="() => RemoveCargo(context.CargoId, context.SelectedTrucks)">Remove</MudButton>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private string _userId;
+
+    private Cargo selectedItem = null;
+    private string searchString = "";
+
+    private IReadOnlyCollection<Cargo> _cargos;
+    private IReadOnlyCollection<Truck> _trucks;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState?.User;
+        if (user.Identity.IsAuthenticated)
+        {
+            _userId = $"{user.FindFirst(claim => claim.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value}";
+        }
+        _cargos = CargoCollection.Instance.GetUserCargos(_userId);
+        _trucks = TruckCollection.GetTrucks();
+    }
+
+    private async Task CreateCargo()
+    {
+        var cargoParameters = new DialogParameters();
+        cargoParameters.Add("Cargo", new Cargo("",0, 0, "", new List<int>(0), 0).ConvertToDto());
+        cargoParameters.Add("ContentText", "Add a new Cargo below");
+        cargoParameters.Add("ButtonText", "Add");
+        var cargoDialog = _dialog.Show<CargoDialog>("Add cargo", cargoParameters);
+        var cargoResult = await cargoDialog.Result;
+
+        if (!cargoResult.Cancelled)
+        {
+            var cargoRes = cargoResult.Data.ToString();
+            if (string.IsNullOrEmpty(cargoRes))
+            {
+                _snackbar.Add("Was unable to convert result string!", Severity.Error);
+                return;
+            }
+            var cargoList = cargoRes.Split("|").ToList();
+            Console.WriteLine(cargoList[1]);
+            string[] element;
+            if (cargoList[1].Contains(","))
+            {
+                element = cargoList[1].Split(",");
+            }
+            else
+            {
+                element = new[] {cargoList[1]};
+            }
+            var cargoType = _trucks.SingleOrDefault(res => res.TruckId == int.Parse(element[0])).CargoType;
+            var requestParameters = new DialogParameters();
+            requestParameters.Add("Request", new Request(0, "", cargoType, 0, 0, 0, 0, "", "", false, false, false).ConvertToDto());
+            requestParameters.Add("CargoType", cargoType);
+            requestParameters.Add("ContentText", "Add and link the request below");
+            requestParameters.Add("ButtonText", "Add & Link");
+            var requestDialog = _dialog.Show<RequestDialog>("Add request", requestParameters);
+            var requestResult = await requestDialog.Result;
+
+            if (!requestResult.Cancelled)
+            {
+                var requestRes = requestResult.Data.ToString();
+                if (string.IsNullOrEmpty(requestRes))
+                {
+                    _snackbar.Add("Was unable to convert result string!", Severity.Error);
+                    return;
+                }
+                var requestList = requestRes.Split("|").ToList();
+                var user = UserCollection.Instance._usersList.SingleOrDefault(res => res.UserId == _userId);
+                var requestId = user.CreateRequest(requestList[0], cargoType, float.Parse(requestList[1]), float.Parse(requestList[2]), float.Parse(requestList[3]), float.Parse(requestList[4]), requestList[5], requestList[6]);
+                if (requestId > 0)
+                {
+                    _snackbar.Add("Successfully added request!", Severity.Success);
+                    var cargoSuccess = CargoCollection.Instance.AddCargo(_userId, cargoList[0], requestId, int.Parse(cargoList[2]));
+                    if (cargoSuccess) _snackbar.Add("Added Cargo successfully & linked request!", Severity.Success);
+                    else
+                    {
+                        _snackbar.Add("Adding Cargo was unsuccessful", Severity.Error);
+                    }
+                    StateHasChanged();
+                }
+                else
+                {
+                    _snackbar.Add("Unable to add request!", Severity.Error);
+                }
+            }
+            else
+            {
+                foreach (var truckString in element)
+                {
+                    var truckId = int.Parse(truckString);
+                    _trucks.SingleOrDefault(res => res.TruckId == truckId)?.Unlink();
+                }
+            }
+        }
+    }
+
+    private async Task EditCargo(Cargo cargo)
+    {
+        var parameters = new DialogParameters { ["Cargo"] = cargo.ConvertToDto() };
+        parameters.Add("ContentText", "Edit the Cargo below");
+        parameters.Add("ButtonText", "Edit");
+        var dialog = _dialog.Show<CargoDialog>("Edit cargo", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Cancelled)
+        {
+            var res = result.Data.ToString();
+            if (string.IsNullOrEmpty(res))
+            {
+                _snackbar.Add("Was unable to convert result string!", Severity.Error);
+                return;
+            }
+            var list = res.Split("|").ToList();
+            var success = cargo.EditCargo(list[0], int.Parse(list[2]));
+            if (success) _snackbar.Add("Edited Cargo successfully!", Severity.Success);
+            else
+            {
+                _snackbar.Add("Failed to edit Cargo!", Severity.Error);
+                return;
+            }
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveCargo(int id, List<int> truckIds)
+    {
+        var success = CargoCollection.Instance.RemoveCargo(_userId, id);
+        foreach (var truckId in truckIds)
+        {
+            var truck = _trucks.SingleOrDefault(res => res.TruckId == truckId);
+            var truckSuccess = truck.Unlink();
+            if (truckSuccess)
+            {
+                _snackbar.Add($"Successfully removed truck with id: {truck.TruckId}!", Severity.Success);
+            }
+            else
+            {
+                _snackbar.Add("Unable to remove truck with id: {truck.TruckId}!", Severity.Error);
+            }
+        }
+        if (success)
+        {
+            _snackbar.Add("Successfully removed cargo!", Severity.Success);
+            StateHasChanged();
+        }
+        else
+        {
+            _snackbar.Add("Unable to remove cargo!", Severity.Error);
+        }
+    }
+
+    private bool FilterFunc(Cargo element)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (element.Destination.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.CargoId == int.Parse(searchString))
+            return true;
+        if (element.MaxCapacity == int.Parse(searchString))
+            return true;
+        if ($"{element.Destination} {element.MaxCapacity} {element.CargoId}".Contains(searchString))
+            return true;
+        return false;
+    }
+}

@@ -1,0 +1,336 @@
+﻿@page "/adminpanel"
+@attribute [Authorize]
+@using Blazored.SessionStorage
+@using eTransport_Application.DialogModels
+@using eTransport_Logic
+@using eTransport_Utility
+
+@inject ISessionStorageService _storage
+@inject ISnackbar _snackbar
+@inject IDialogService _dialog
+
+@if (UserCollection.CheckAdmin(_userId))
+{
+    <h3>Admin Dashboard</h3>
+
+    <MudButton Variant="Variant.Filled" OnClick="CreateRideShare">Create RideShare</MudButton>
+
+    <MudTable Items="@_rideshares" Dense="false" Hover="true" Bordered="false" Striped="false" Filter="new Func<RideShare,bool>(FilterFuncRS)" @bind-SelectedItem="selectedItemRS">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Rideshares</MudText>
+            <MudToolBarSpacer />
+            <MudTextField @bind-Value="searchStringRS" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Id</MudTh>
+            <MudTh>Destination</MudTh>
+            <MudTh>Maximum Capacity</MudTh>
+            <MudTh>Cargo Type</MudTh>
+            <MudTh>Truck Brand</MudTh>
+            <MudTh>Linked Requests</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Id">@context.RideShareId</MudTd>
+            <MudTd DataLabel="Destination">@context.Destination</MudTd>
+            <MudTd DataLabel="Maximum Capacity">@context.MaxCapacity</MudTd>
+            <MudTd DataLabel="Cargo Type">@_trucks.SingleOrDefault(res => res.TruckId == context.SelectedTruck)?.CargoType</MudTd>
+            <MudTd DataLabel="Truck Brand">@_trucks.SingleOrDefault(res => res.TruckId == context.SelectedTruck)?.Brand.ToString()</MudTd>
+            <MudTd DataLabel="Linked Requests">@string.Join("|", context.Requests)</MudTd>
+            <MudTd DataLabel="Button">
+                <MudButton Variant="Variant.Filled" OnClick="() => EditRideshare(context)">Edit</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="() => RemoveRideshare(context.RideShareId)">Remove</MudButton>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+
+    <MudButton Variant="Variant.Filled" OnClick="CreateTruck">Create Truck</MudButton>
+
+    <MudTable Items="@_trucks" Dense="false" Hover="true" Bordered="false" Striped="false" Filter="new Func<Truck,bool>(FilterFuncT)" @bind-SelectedItem="selectedItemT">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Trucks</MudText>
+            <MudToolBarSpacer />
+            <MudTextField @bind-Value="searchStringT" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Id</MudTh>
+            <MudTh>License Plate</MudTh>
+            <MudTh>Range</MudTh>
+            <MudTh>Max Weight</MudTh>
+            <MudTh>Max Height</MudTh>
+            <MudTh>Type</MudTh>
+            <MudTh>Brand</MudTh>
+            <MudTh>In use</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Id">@context.TruckId</MudTd>
+            <MudTd DataLabel="LicensePlate">@context.LicensePlate</MudTd>
+            <MudTd DataLabel="Range">@context.TruckRange</MudTd>
+            <MudTd DataLabel="MaxWeight">@context.Weight</MudTd>
+            <MudTd DataLabel="MaxHeight">@context.Height</MudTd>
+            <MudTd DataLabel="Type">@context.CargoType.ToString()</MudTd>
+            <MudTd DataLabel="Brand">@context.Brand.ToString()</MudTd>
+            <MudTd DataLabel="InUse">@context.InUse</MudTd>
+            <MudTd DataLabel="Button">
+                <MudButton Variant="Variant.Filled" OnClick="() => EditTruck(context)">Edit</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="() => RemoveTruck(context.TruckId)">Remove</MudButton>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+}
+else
+{
+    <h3>You don't have access to this page.</h3>
+}
+
+@code {
+    private string _userId;
+
+    private RideShare selectedItemRS = null;
+    private string searchStringRS = "";
+
+    private Truck selectedItemT = null;
+    private string searchStringT = "";
+
+    private IReadOnlyCollection<RideShare> _rideshares;
+    private IReadOnlyCollection<Truck> _trucks;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userId = await _storage.GetItemAsync<string>("userId");
+        _rideshares = RideShareCollection.GetRideShares();
+        _trucks = TruckCollection.GetTrucks();
+    }
+
+    private async Task CreateRideShare()
+    {
+        try
+        {
+            var parameters = new DialogParameters();
+            parameters.Add("RideShare", new RideShare(0, new List<int>(0), "", 0, 0).ConvertToDto());
+            parameters.Add("ContentText", "Add a new Rideshare below");
+            parameters.Add("ButtonText", "Add");
+            var dialog = _dialog.Show<RideShareDialog>("Add rideshare", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Cancelled)
+            {
+                var res = result.Data.ToString();
+                if (string.IsNullOrEmpty(res))
+                {
+                    _snackbar.Add("Was unable to convert result string!", Severity.Error);
+                    return;
+                }
+                var list = res.Split("|").ToList();
+                var success = RideShareCollection.Instance.AddRideShare(_userId, list[0], int.Parse(list[1]), int.Parse(list[2]));
+                if (success) _snackbar.Add("Added Rideshare successfully!", Severity.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task EditRideshare(RideShare rideShare)
+    {
+        try
+        {
+            var parameters = new DialogParameters {["RideShare"] = rideShare.ConvertToDto() };
+            parameters.Add("ContentText", "Edit the Rideshare below");
+            parameters.Add("ButtonText", "Edit");
+            var dialog = _dialog.Show<RideShareDialog>("Edit rideshare", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Cancelled)
+            {
+                var res = result.Data.ToString();
+                if (string.IsNullOrEmpty(res))
+                {
+                    _snackbar.Add("Unable to convert result string!", Severity.Error);
+                    return;
+                }
+                var list = res.Split("|").ToList();
+                if (rideShare.SelectedTruck == 0)
+                {
+                    rideShare.LinkTruck(_userId, int.Parse(list[1]));
+                }
+                else
+                {
+                    rideShare.UnlinkTruck(_userId, rideShare.SelectedTruck);
+                    rideShare.LinkTruck(_userId, int.Parse(list[1]));
+                }
+                var success = rideShare.EditRideShare(_userId, list[0], int.Parse(list[2]));
+                if (success) _snackbar.Add("Edited Rideshare successfully!", Severity.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void RemoveRideshare(int id)
+    {
+        try
+        {
+            var success = RideShareCollection.Instance.RemoveRideShare(_userId, id);
+            if (success)
+            {
+                _snackbar.Add("Successfully removed rideshare!", Severity.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private bool FilterFuncRS(RideShare element)
+    {
+        if (string.IsNullOrWhiteSpace(searchStringRS))
+            return true;
+        if (element.Destination.Contains(searchStringRS, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.RideShareId == int.Parse(searchStringRS))
+            return true;
+        if (element.MaxCapacity == int.Parse(searchStringRS))
+            return true;
+        if ($"{element.Destination} {element.MaxCapacity} {element.RideShareId}".Contains(searchStringRS))
+            return true;
+        return false;
+    }
+
+    private async Task CreateTruck()
+    {
+        try
+        {
+            var parameters = new DialogParameters();
+            parameters.Add("Truck", new Truck(0, "", "", "", 0, 0, 0, TruckBrand.Daimler, MaterialState.Solid, false).ConvertToDto());
+            parameters.Add("ContentText", "Add a new Truck below");
+            parameters.Add("ButtonText", "Add");
+            var dialog = _dialog.Show<TruckDialog>("Add Truck", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Cancelled)
+            {
+                var res = result.Data.ToString();
+                if (string.IsNullOrEmpty(res))
+                {
+                    _snackbar.Add("Was unable to convert result string!", Severity.Error);
+                    return;
+                }
+                var list = res.Split("|").ToList();
+                var brand = int.Parse(list[6]) switch
+                {
+                    0 => TruckBrand.Daimler,
+                    1 => TruckBrand.Tesla,
+                    2 => TruckBrand.Volvo,
+                    _ => TruckBrand.Workhorse
+                };
+                var cargoType = int.Parse(list[7]) switch
+                {
+                    0 => MaterialState.Solid,
+                    1 => MaterialState.Liquid,
+                    _ => MaterialState.Gas
+                };
+                var success = TruckCollection.Instance.AddTruck(_userId, list[0], list[1], list[2], float.Parse(list[3]), float.Parse(list[4]), float.Parse(list[5]), brand, cargoType);
+                if (success) _snackbar.Add("Added Truck successfully!", Severity.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task EditTruck(Truck truck)
+    {
+        try
+        {
+            var parameters = new DialogParameters { ["Truck"] = truck.ConvertToDto() };
+            parameters.Add("ContentText", "Edit the Truck below");
+            parameters.Add("ButtonText", "Edit");
+            var dialog = _dialog.Show<TruckDialog>("Add Truck", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Cancelled)
+            {
+                var res = result.Data.ToString();
+                if (string.IsNullOrEmpty(res))
+                {
+                    _snackbar.Add("Unable to convert result string!", Severity.Error);
+                    return;
+                }
+                var list = res.Split("|").ToList();
+                var brand = int.Parse(list[6]) switch
+                {
+                    0 => TruckBrand.Daimler,
+                    1 => TruckBrand.Tesla,
+                    2 => TruckBrand.Volvo,
+                    _ => TruckBrand.Workhorse
+                };
+                var cargoType = int.Parse(list[7]) switch
+                {
+                    0 => MaterialState.Solid,
+                    1 => MaterialState.Liquid,
+                    _ => MaterialState.Gas
+                };
+                var collection = TruckCollection.GetTrucks();
+                var truckEntry = collection?.SingleOrDefault(entry => entry.TruckId == truck.TruckId);
+                var success = truckEntry.EditTruck(_userId,list[0], list[1], list[2], float.Parse(list[3]), float.Parse(list[4]), float.Parse(list[5]), brand, cargoType);
+                if (success) _snackbar.Add("Edited Truck successfully!", Severity.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private void RemoveTruck(int id)
+    {
+        try
+        {
+            var success = TruckCollection.Instance.RemoveTruck(_userId, id);
+            if (success)
+            {
+                _snackbar.Add("Successfully removed truck!", Severity.Success);
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private bool FilterFuncT(Truck element)
+    {
+        if (string.IsNullOrWhiteSpace(searchStringT))
+            return true;
+        if (element.LicensePlate.Contains(searchStringT, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.TruckId == int.Parse(searchStringT))
+            return true;
+        if (element.Brand.ToString().Contains(searchStringT, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.CargoType.ToString().Contains(searchStringT, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if ($"{element.TruckId} {element.LicensePlate} {element.Brand.ToString()} {element.CargoType.ToString()}".Contains(searchStringT))
+            return true;
+        return false;
+    }
+}

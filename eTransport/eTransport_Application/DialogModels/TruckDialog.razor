@@ -1,0 +1,65 @@
+﻿@using eTransport_Utility
+@inject ISnackbar _snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @ContentText
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm Model="Truck">
+            <DataAnnotationsValidator/>
+            <MudTextField @bind-Value="@Truck.TruckRange" For="() => Truck.TruckRange" Label="Range"></MudTextField>
+            <MudTextField @bind-Value="@Truck.Weight" For="() => Truck.Weight" Label="Weight"></MudTextField>
+            <MudTextField @bind-Value="@Truck.LicensePlate" For="() => Truck.LicensePlate" Label="License Plate"></MudTextField>
+            <MudTextField @bind-Value="@Truck.FuelUsage" For="() => Truck.FuelUsage" Label="Fuel Usage"></MudTextField>
+            <MudTextField @bind-Value="@Truck.Height" For="() => Truck.Height" Label="Height"></MudTextField>
+            <MudTextField @bind-Value="@Truck.Capacity" For="() => Truck.Capacity" Label="Capacity"></MudTextField>
+            <MudMenu Variant="Variant.Filled" Direction="Direction.Bottom" Label="Brand">
+                <MudMenuItem OnClick="() => SetBrand(0)">@TruckBrand.Daimler.ToString()</MudMenuItem>
+                <MudMenuItem OnClick="() => SetBrand(1)">@TruckBrand.Tesla.ToString()</MudMenuItem>
+                <MudMenuItem OnClick="() => SetBrand(2)">@TruckBrand.Volvo.ToString()</MudMenuItem>
+                <MudMenuItem OnClick="() => SetBrand(3)">@TruckBrand.Workhorse.ToString()</MudMenuItem>
+            </MudMenu>
+            <MudMenu Variant="Variant.Filled" Direction="Direction.Bottom" Label="Cargo Type">
+                <MudMenuItem OnClick="() => SetType(0)">@MaterialState.Solid.ToString()</MudMenuItem>
+                <MudMenuItem OnClick="() => SetType(1)">@MaterialState.Liquid.ToString()</MudMenuItem>
+                <MudMenuItem OnClick="() => SetType(2)">@MaterialState.Gas.ToString()</MudMenuItem>
+            </MudMenu>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Submit">@ButtonText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public TruckDto Truck { get; set; }
+    [Parameter] public string ContentText { get; set; }
+    [Parameter] public string ButtonText { get; set; }
+    private int Brand { get; set; }
+    private int CargoType { get; set; }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void SetBrand(int brand)
+    {
+        Brand = brand;
+    }
+
+    private void SetType(int type)
+    {
+        CargoType = type;
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok($"{Truck.TruckRange}|{Truck.Weight}|{Truck.LicensePlate}|{Truck.FuelUsage}|{Truck.Height}|{Truck.Capacity}|{Brand}|{CargoType}"));
+    }
+}

@@ -1,0 +1,70 @@
+﻿@page "/rideshares"
+@attribute [Authorize]
+@using eTransport_Logic
+@using Blazored.SessionStorage
+
+@inject ISessionStorageService _storage
+@inject NavigationManager _nav
+
+<MudTable Items="@_rideshares" Dense="false" Hover="true" Bordered="false" Striped="false" Filter="new Func<RideShare,bool>(FilterFunc)" @bind-SelectedItem="selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Rideshares</MudText>
+        <MudToolBarSpacer />
+        <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>Id</MudTh>
+        <MudTh>Destination</MudTh>
+        <MudTh>Maximum Capacity</MudTh>
+        <MudTh>Cargo Type</MudTh>
+        <MudTh>Truck Brand</MudTh>
+        <MudTh>Linked Requests</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Id">@context.RideShareId</MudTd>
+        <MudTd DataLabel="Destination">@context.Destination</MudTd>
+        <MudTd DataLabel="Maximum Capacity">@context.MaxCapacity</MudTd>
+        <MudTd DataLabel="Cargo Type">@TruckCollection.GetTrucks().SingleOrDefault(res => res.TruckId == context.SelectedTruck)?.CargoType</MudTd>
+        <MudTd DataLabel="Truck Brand">@TruckCollection.GetTrucks().SingleOrDefault(res => res.TruckId == context.SelectedTruck)?.Brand.ToString()</MudTd>
+        <MudTd DataLabel="Linked Requests">@context.Requests.ToString()</MudTd>
+        <MudTd DataLabel="Button">
+            <button @onclick="() => SelectRideshare(context)" style="margin: 5px" type="button" class="btn btn-primary">Join</button>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private RideShare selectedItem = null;
+    private string searchString = "";
+    private IReadOnlyCollection<RideShare> _rideshares;
+
+    protected override void OnInitialized()
+    {
+        _rideshares = RideShareCollection.GetRideShares();
+    }
+
+    private async Task SelectRideshare(RideShare rideShare)
+    {
+        await _storage.SetItemAsync("rsObj", rideShare);
+        _nav.NavigateTo("rideshare");
+    }
+
+    private bool FilterFunc(RideShare element)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (element.Destination.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.RideShareId == int.Parse(searchString))
+            return true;
+        if (element.MaxCapacity == int.Parse(searchString))
+            return true;
+        if ($"{element.Destination} {element.MaxCapacity} {element.RideShareId}".Contains(searchString))
+            return true;
+        return false;
+    }
+}

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\eTransport_Persistence.Interfaces\eTransport_Persistence.Interfaces.csproj" />
+    <ProjectReference Include="..\eTransport_Persistence\eTransport_Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

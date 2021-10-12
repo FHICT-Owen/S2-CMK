@@ -1,0 +1,23 @@
+﻿@page
+@using Blazored.SessionStorage
+@using eTransport_Utility
+@using Microsoft.AspNetCore.Identity
+@using MudBlazor
+@attribute [IgnoreAntiforgeryToken]
+@inject SignInManager<ETransportUser> _signInManager
+@inject ISessionStorageService _storage
+@inject ISnackbar _snackbar
+@{
+    @functions {
+        public async Task<IActionResult> OnPost()
+        {
+            if (_signInManager.IsSignedIn(User))
+            {
+                _snackbar.Clear();
+                await _signInManager.SignOutAsync();
+            }
+
+            return Redirect("~/");
+        }
+    }
+}

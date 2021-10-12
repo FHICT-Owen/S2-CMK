@@ -1,0 +1,51 @@
+﻿@using eTransport_Utility
+@inject ISnackbar _snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @ContentText
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm Model="@Request">
+            <DataAnnotationsValidator />
+            <MudTextField @bind-Value="@Request.Materials" Label="Materials"></MudTextField>
+            @if (CargoType == MaterialState.Solid)
+            {
+                <MudTextField @bind-Value="@Request.CargoHeight" Label="Height (Meters)"></MudTextField>
+                <MudTextField @bind-Value="@Request.CargoWidth" Label="Width (Meters)"></MudTextField>
+                <MudTextField @bind-Value="@Request.CargoLength" Label="Length (Meters)"></MudTextField>
+            }
+            else
+            {
+                <MudTextField @bind-Value="@Request.CargoVolume" Label="Volume (Liters)"></MudTextField>
+            }
+            <MudTextField @bind-Value="@Request.PickupLocation" Label="Pickup Location"></MudTextField>
+            <MudTextField @bind-Value="@Request.Comments" Label="Comments"></MudTextField>
+
+        </EditForm>        
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Submit">@ButtonText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public RequestDto Request { get; set; }
+    [Parameter] public string ContentText { get; set; }
+    [Parameter] public string ButtonText { get; set; }
+    [Parameter] public MaterialState CargoType { get; set; }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void Submit()
+    {
+        MudDialog.Close(DialogResult.Ok($"{Request.Materials}|{Request.CargoHeight}|{Request.CargoWidth}|{Request.CargoLength}|{Request.CargoVolume}|{Request.PickupLocation}|{Request.Comments}"));
+    }
+}

@@ -1,0 +1,64 @@
+﻿@using eTransport_Logic
+@using eTransport_Utility
+@inject ISnackbar _snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            @ContentText
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm Model="@RideShare">
+            <DataAnnotationsValidator/>
+            <MudTextField @bind-Value="@RideShare.Destination" Label="Destination"></MudTextField>
+            <MudTextField @bind-Value="@RideShare.MaxCapacity" Label="Max Capacity"></MudTextField>
+            <MudMenu Variant="Variant.Filled" Direction="Direction.Bottom" Label="@TruckLabel">
+                @foreach (var truck in TruckCollection.GetTrucks())
+                {
+                    if (truck.InUse == false)
+                    {
+                        var parameters = $"{truck.Brand} ({truck.Capacity}|{truck.CargoType})";
+                        <MudMenuItem OnClick="() => SetTruck(truck)">@parameters</MudMenuItem>
+                    }
+                }
+            </MudMenu>
+        </EditForm>        
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton OnClick="Submit">@ButtonText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public RideShareDto RideShare { get; set; }
+    [Parameter] public string ContentText { get; set; }
+    [Parameter] public string ButtonText { get; set; }
+    private string TruckLabel { get; set; } = "Truck";
+    private int TruckId { get; set; }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private void SetTruck(Truck truck)
+    {
+        TruckId = truck.TruckId;
+        TruckLabel = $"{truck.Brand}";
+    }
+
+    private void Submit()
+    {
+        if (TruckId <= 0) _snackbar.Add("No truck has been selected!", Severity.Error);
+        else
+        {
+            var truckCap = TruckCollection.GetTrucks().SingleOrDefault(res => res.TruckId == TruckId).Capacity;
+            if (RideShare.MaxCapacity > truckCap)
+                _snackbar.Add("Rideshare capacity is set higher than Truck max capacity!", Severity.Error);
+            else MudDialog.Close(DialogResult.Ok($"{RideShare.Destination}|{TruckId}|{RideShare.MaxCapacity}"));
+        }
+    }
+}
